@@ -1,25 +1,158 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Peer Assessment 1"
+author: "Grant Oliveira"
+date: "March 14, 2015"
+output: html_document
 ---
 
 
-## Loading and preprocessing the data
+
+This is my take on Peer Assessment 1 for the sixth course in the Coursera Data Science Specialization, "Reproducible Research". It involves a simple data analysis but is meant more to demonstrate a familiarity with reproducible research workflow using R markdown and the knitr package. The assignment specifies that the code must be shown for each step, so I'll begin by setting the global option to echo code.
+
+```{r}
+echo=TRUE
+```
+
+## This analysis requires the following packages:
+
+- dplyr
+- ggplot2
+- reshape2
+
+---
+
+Next we'll load the data, which is a dataset containing the readout from wearable tech monitoring the amount of steps taken in five minute intervals. It has three variables
+
+- **steps:** Number of steps taken in a 5-minute interval with missing values coded as NA
+- **date:** The date on which the measurement was taken in YYYY-MM-DD format
+- **interval:** Indentifier for the 5-minute interval in which the measurement was taken.
+
+It's stored in a CSV file with 17,568 total observations. Let's load that now:
+
+```{r}
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", destfile = "./repdata-data-activity.zip", method = "curl")
+
+unzip("./repdata-data-activity.zip")
+
+data <- read.csv("./activity.csv", colClasses=c("integer","Date","numeric"))
+```
+
+##Section 1:
+
+The first question on the assignment asks us to calculate the total number of steps taken per day and then plot it into a histogram. I like using *dplyr* for this kind of stuff, so if you don't have it installed go ahead and do that. Thank me later. I like *ggplot2* for plotting but that comes down to preference
+
+
+```{r}
+library(dplyr)
+groupSteps <- group_by(data, date)
+steps <- summarise(groupSteps,
+                   total = sum(steps, na.rm = TRUE))
+
+library(ggplot2)
+ggplot(steps, aes(date, total)) + geom_bar(stat = "identity", colour = "black", fill = "black", width = 0.7)  + labs(title = " Total Number of Steps Taken Each Day", x = "Date", y = "Steps")
+```
+
+The assignment then asks us to calculate and report the mean and median of the total number of steps taken per day:
+
+```{r}
+summary(steps$total)
+```
+
+Swag.
+
+##Section 2: 
+
+Section number two asks us to make a time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+
+```{r}
+data2 <- data[complete.cases(data),]
+groupSteps2 <- group_by(data2, interval)
+steps2 <- summarise(groupSteps2,
+                    avg = mean(steps))
+
+
+ggplot(steps2, aes(interval, avg)) + geom_line(colour = "black", fill = "black", width = 0.7)  + labs(title = "Average Steps By Interval", x = "Interval", y = "Steps")
+```
+
+Then it asks which interval has the highest average value
+
+```{r}
+steps2[steps2$avg == max(steps2$avg),]
+```
+
+##Section 3:
+
+Section 3 first asks what the total number of missing values is in the data set
+
+```{r}
+sum(is.na(data))
+```
+
+Then it asks us to fill these observations with some kind of data, mean or median will work. 
+
+```{r}
+data3 <- data
+mean <- mean(!is.na(data$steps))
+data3[is.na(data3)] <- mean 
+```
+
+Then it asks us create a histogram of the total number of steps per day then calculate the mean and median total steps per day. We'll just crib the function from the first section.
+
+
+```{r} 
+groupSteps3 <- group_by(data3, date)
+steps <- summarise(groupSteps,
+                   total = sum(steps))
+
+ggplot(steps, aes(date, total)) + geom_bar(stat = "identity", colour = "black", fill = "black", width = 0.7)  + labs(title = " Total Number of Steps Taken Each Day", x = "Date", y = "Steps")
+```
+
+Then we have to calculate and report the mean and median. Easy enough.
+
+```{r}
+mean(data3$steps)
+median(data3$steps)
+```
 
 
 
-## What is mean total number of steps taken per day?
+##Section 4:
+
+Finally, the assignment asks if there are different activity levels on weekdays vs. weekends. First we have to make a new factor variable denoting whether each day is a weekend or weekday. I used gsub for each day, and it's a little tedious so if you have a more elegant solution I'm open to suggestion!
 
 
+```{r} 
+data4 <- data
+data4 <- mutate(data4, weekdays = weekdays(date))
+data4[,4] <- gsub("Monday", "Weekday", data4[,4])
+data4[,4] <- gsub("Tuesday", "Weekday", data4[,4])
+data4[,4] <- gsub("Wednesday", "Weekday", data4[,4])
+data4[,4] <- gsub("Thursday", "Weekday", data4[,4])
+data4[,4] <- gsub("Friday", "Weekday", data4[,4])
+data4[,4] <- gsub("Saturday", "Weekend", data4[,4])
+data4[,4] <- gsub("Sunday", "Weekend", data4[,4])
+```
 
-## What is the average daily activity pattern?
+Then we make the graph in much the same way we made the one in section 2. I put both lines on the same graph because I felt it's easier to compare that way than doing it in panels like Dr. Peng did.
 
+```{r}
+data4 <- data4[complete.cases(data4),]
+weekday <- filter(data4, data4[,4] == "Weekday")
+groupWeekday <- group_by(weekday, interval)
+newWeekday <- summarise(groupWeekday,
+                    avg = mean(steps))
 
+weekend <- filter(data4, data4[,4] == "Weekend")
+groupWeekend <- group_by(weekend, interval)
+newWeekend <- summarise(groupWeekend,
+                    avg = mean(steps))
 
-## Imputing missing values
+library(reshape2)
+total <- cbind(newWeekday, newWeekend[,2])
+colnames(total) <- c("Interval", "Weekday Average", "Weekend Average")
+total <- melt(total, id.vars = "Interval")
 
+ggplot(total, aes(Interval, value), group = variable) + geom_line(aes(color=variable, width = 0.7)) + labs(title = "Average Steps By Interval", x = "Interval", y = "Steps")
+```
 
-
-## Are there differences in activity patterns between weekdays and weekends?
+That should be everything! Thanks for reading and good luck in the rest of the class!
